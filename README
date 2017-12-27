@@ -1,0 +1,22 @@
+
+Author: Gustavo Araújo
+
+====
+
+This implementation are based on this repositories:
+
+  LoRaWan: https://github.com/imec-idlab/ns-3-dev-git/tree/lorawan
+
+  NB-IoT: https://github.com/TommyPec/ns-3-dev-NB-IOT
+
+====
+
+However, the real quick and dirty way to get started is to
+type the command
+  ./waf configure --enable-examples
+followed by
+  ./waf 
+in the the directory which contains
+this README file. The files built will be copied in the
+build/ directory.
+
