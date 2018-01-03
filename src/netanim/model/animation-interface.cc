@@ -16,8 +16,6 @@
  * Author: George F. Riley<riley@ece.gatech.edu>
  * Modified by: John Abraham <john.abraham@gatech.edu>
  * Contributions: Eugene Kalishenko <ydginster@gmail.com> (Open Source and Linux Laboratory http://dev.osll.ru/)
- *                Tommaso Pecorella <tommaso.pecorella@unifi.it>
- *                Pavel Vasilyev <pavel.vasilyev@sredasolutions.com>
  */
 
 // Interface between ns-3 and the network animator
@@ -25,9 +23,7 @@
 
 
 #include <cstdio>
-#ifndef WIN32
 #include <unistd.h>
-#endif
 #include <sstream>
 #include <fstream>
 #include <string>
@@ -46,19 +42,15 @@
 #include "ns3/wimax-mac-header.h"
 #include "ns3/wifi-net-device.h"
 #include "ns3/wifi-mac.h"
-#include "ns3/lr-wpan-mac-header.h"
-#include "ns3/lr-wpan-net-device.h"
+#include "ns3/lorawan-net-device.h"
 #include "ns3/constant-position-mobility-model.h"
 #include "ns3/lte-ue-phy.h"
 #include "ns3/lte-enb-phy.h"
 #include "ns3/uan-net-device.h"
 #include "ns3/uan-mac.h"
-#include "ns3/double.h"
 #include "ns3/ipv4.h"
-#include "ns3/ipv6.h"
 #include "ns3/ipv4-routing-protocol.h"
 #include "ns3/energy-source-container.h"
-#include "animation-interface.h"
 
 namespace ns3 {
 
@@ -66,7 +58,7 @@ NS_LOG_COMPONENT_DEFINE ("AnimationInterface");
 
 // Globals
 
-static bool initialized = false; //!< Initialization flag
+static bool initialized = false;
 
 
 // Public methods
@@ -458,8 +450,7 @@ AnimationInterface::MobilityAutoCheck ()
       PurgePendingPackets (AnimationInterface::WIMAX);
       PurgePendingPackets (AnimationInterface::LTE);
       PurgePendingPackets (AnimationInterface::CSMA);
-      PurgePendingPackets (AnimationInterface::LRWPAN);
-      PurgePendingPackets (AnimationInterface::WAVE);
+      PurgePendingPackets (AnimationInterface::LORAWAN);
       Simulator::Schedule (m_mobilityPollInterval, &AnimationInterface::MobilityAutoCheck, this);
     }
 }
@@ -697,31 +688,31 @@ AnimationInterface::WifiMacRxDropTrace (std::string context, Ptr<const Packet> p
 }
 
 void
-AnimationInterface::LrWpanMacTxTrace (std::string context, Ptr<const Packet> p)
+AnimationInterface::LoRaWANMacTxTrace (std::string context, Ptr<const Packet> p)
 {
   const Ptr <const Node> node = GetNodeFromContext (context);
-  ++m_nodeLrWpanMacTx[node->GetId ()];
+  ++m_nodeLoRaWANMacTx[node->GetId ()];
 }
 
 void
-AnimationInterface::LrWpanMacTxDropTrace (std::string context, Ptr<const Packet> p)
+AnimationInterface::LoRaWANMacTxDropTrace (std::string context, Ptr<const Packet> p)
 {
   const Ptr <const Node> node = GetNodeFromContext (context);
-  ++m_nodeLrWpanMacTxDrop[node->GetId ()];
+  ++m_nodeLoRaWANMacTxDrop[node->GetId ()];
 }
 
 void
-AnimationInterface::LrWpanMacRxTrace (std::string context, Ptr<const Packet> p)
+AnimationInterface::LoRaWANMacRxTrace (std::string context, Ptr<const Packet> p)
 {
   const Ptr <const Node> node = GetNodeFromContext (context);
-  ++m_nodeLrWpanMacRx[node->GetId ()];
+  ++m_nodeLoRaWANMacRx[node->GetId ()];
 }
 
 void
-AnimationInterface::LrWpanMacRxDropTrace (std::string context, Ptr<const Packet> p)
+AnimationInterface::LoRaWANMacRxDropTrace (std::string context, Ptr<const Packet> p)
 {
   const Ptr <const Node> node = GetNodeFromContext (context);
-  ++m_nodeLrWpanMacRxDrop[node->GetId ()];
+  ++m_nodeLoRaWANMacRxDrop[node->GetId ()];
 }
 
 void
@@ -912,7 +903,7 @@ AnimationInterface::WifiPhyRxBeginTrace (std::string context, Ptr<const Packet> 
 }
 
 void 
-AnimationInterface::LrWpanPhyTxBeginTrace (std::string context,
+AnimationInterface::LoRaWANPhyTxBeginTrace (std::string context,
                                            Ptr<const Packet> p)
 {
   NS_LOG_FUNCTION (this);
@@ -920,36 +911,31 @@ AnimationInterface::LrWpanPhyTxBeginTrace (std::string context,
 
   Ptr <NetDevice> ndev = GetNetDeviceFromContext (context);
   NS_ASSERT (ndev);
-  Ptr<LrWpanNetDevice> netDevice = DynamicCast<LrWpanNetDevice> (ndev);
+  Ptr<LoRaWANNetDevice> netDevice = DynamicCast<LoRaWANNetDevice> (ndev);
+  NS_ASSERT (netDevice);
 
   Ptr <Node> n = ndev->GetNode ();
   NS_ASSERT (n);
 
   UpdatePosition (n);
 
-  LrWpanMacHeader hdr;
-  if (!p->PeekHeader (hdr))
-  {
-    NS_LOG_WARN ("LrWpanMacHeader not present");
+  // We need to couple the MAC address (i.e. device address) of the sender to the nodeId of the sender
+  // We don't actually assign MAC addresses to gateways in the LoRaWAN module, this is problematic as we can not distuingish between multiple gateways in netamin.
+  // TODO: Fix
+  // For end devices: get MAC address from the net device
+  // For gateways: assume fixed MAC address of ff:ff:ff:ff
+  std::ostringstream oss;
+  if (netDevice->GetDeviceType () == LORAWAN_DT_END_DEVICE_CLASS_A) {
+    Ipv4Address nodeAddr = netDevice->GetMac()->GetDevAddr ();
+    oss << nodeAddr;
+  } else if (netDevice->GetDeviceType () == LORAWAN_DT_GATEWAY) {
+    Ipv4Address nodeAddr = Ipv4Address("255.255.255.255");
+    oss << nodeAddr;
+  } else {
+    NS_LOG_WARN ("Unrecognized LoRaWAN device type");
     return;
   }
 
-  std::ostringstream oss;
-  if (hdr.GetSrcAddrMode () == 2)
-    {
-      Mac16Address nodeAddr = netDevice->GetMac ()->GetShortAddress ();
-      oss << nodeAddr;
-    }
-  else if (hdr.GetSrcAddrMode () == 3)
-    {
-      Mac64Address nodeAddr = netDevice->GetMac ()->GetExtendedAddress ();
-      oss << nodeAddr;
-    }
-  else
-    {
-      NS_LOG_WARN ("LrWpanMacHeader without source address");
-      return;
-    }
   m_macToNodeIdMap[oss.str ()] = n->GetId ();
   NS_LOG_INFO ("Added Mac" << oss.str () << " node:" <<m_macToNodeIdMap[oss.str ()]);
 
@@ -958,13 +944,13 @@ AnimationInterface::LrWpanPhyTxBeginTrace (std::string context,
   AddByteTag (gAnimUid, p);
 
   AnimPacketInfo pktInfo (ndev, Simulator::Now ());
-  AddPendingPacket (AnimationInterface::LRWPAN, gAnimUid, pktInfo);
+  AddPendingPacket (AnimationInterface::LORAWAN, gAnimUid, pktInfo);
 
-  OutputWirelessPacketTxInfo (p, m_pendingLrWpanPackets[gAnimUid], gAnimUid);
+  OutputWirelessPacketTxInfo (p, m_pendingLoRaWANPackets[gAnimUid], gAnimUid);
 }
 
 void
-AnimationInterface::LrWpanPhyRxBeginTrace (std::string context,
+AnimationInterface::LoRaWANPhyRxBeginTrace (std::string context,
                                            Ptr<const Packet> p)
 {
   NS_LOG_FUNCTION (this);
@@ -981,64 +967,18 @@ AnimationInterface::LrWpanPhyRxBeginTrace (std::string context,
     }
 
   uint64_t animUid = GetAnimUidFromPacket (p);
-  NS_LOG_INFO ("LrWpan RxBeginTrace for packet:" << animUid);
-  if (!IsPacketPending (animUid, AnimationInterface::LRWPAN))
+  NS_LOG_INFO ("LoRaWAN RxBeginTrace for packet:" << animUid);
+  if (!IsPacketPending (animUid, AnimationInterface::LORAWAN))
     {
-      NS_LOG_WARN ("LrWpanPhyRxBeginTrace: unknown Uid - most probably it's an ACK.");
+      NS_LOG_WARN ("LoRaWANPhyRxBeginTrace: unknown Uid - !INVESTIGATE!");
     }
 
   UpdatePosition (n);
-  m_pendingLrWpanPackets[animUid].ProcessRxBegin (ndev, Simulator::Now ().GetSeconds ());
-  OutputWirelessPacketRxInfo (p, m_pendingLrWpanPackets[animUid], animUid);
+  m_pendingLoRaWANPackets[animUid].ProcessRxBegin (ndev, Simulator::Now ().GetSeconds ());
+  OutputWirelessPacketRxInfo (p, m_pendingLoRaWANPackets[animUid], animUid);
 }
 
-void
-AnimationInterface::WavePhyTxBeginTrace (std::string context, Ptr<const Packet> p)
-{
-  NS_LOG_FUNCTION (this);
-  return GenericWirelessTxTrace (context, p, AnimationInterface::WAVE);
-}
-
-void
-AnimationInterface::WavePhyRxBeginTrace (std::string context, Ptr<const Packet> p)
-{
-  NS_LOG_FUNCTION (this);
-  CHECK_STARTED_INTIMEWINDOW_TRACKPACKETS;
-  Ptr <NetDevice> ndev = GetNetDeviceFromContext (context);
-  NS_ASSERT (ndev);
-  UpdatePosition (ndev);
-  uint64_t animUid = GetAnimUidFromPacket (p);
-  NS_LOG_INFO ("Wave RxBeginTrace for packet:" << animUid);
-  if (!IsPacketPending (animUid, AnimationInterface::WAVE))
-    {
-      NS_ASSERT (0);
-      NS_LOG_WARN ("WavePhyRxBeginTrace: unknown Uid");
-      std::ostringstream oss;
-      WifiMacHeader hdr;
-      if (!p->PeekHeader (hdr))
-      {
-        NS_LOG_WARN ("WaveMacHeader not present");
-        return;
-      }
-      oss << hdr.GetAddr2 ();
-      if (m_macToNodeIdMap.find (oss.str ()) == m_macToNodeIdMap.end ())
-      {
-        NS_LOG_WARN ("Transmitter Mac address " << oss.str () << " never seen before. Skipping");
-        return;
-      }
-      Ptr <Node> txNode = NodeList::GetNode (m_macToNodeIdMap[oss.str ()]);
-      UpdatePosition (txNode);
-      AnimPacketInfo pktInfo (0, Simulator::Now (), m_macToNodeIdMap[oss.str ()]);
-      AddPendingPacket (AnimationInterface::WAVE, animUid, pktInfo);
-      NS_LOG_WARN ("WavePhyRxBegin: unknown Uid, but we are adding a wave packet");
-    }
-  /// \todo NS_ASSERT (WavePacketIsPending (animUid) == true);
-  m_pendingWavePackets[animUid].ProcessRxBegin (ndev, Simulator::Now ().GetSeconds ());
-  OutputWirelessPacketRxInfo (p, m_pendingWavePackets[animUid], animUid);
-}
-
-
-void
+void 
 AnimationInterface::WimaxTxTrace (std::string context, Ptr<const Packet> p, const Mac48Address & m)
 {
   NS_LOG_FUNCTION (this);
@@ -1333,14 +1273,9 @@ AnimationInterface::ProtocolTypeToPendingPackets (AnimationInterface::ProtocolTy
           pendingPackets = &m_pendingLtePackets;
           break;
         }
-      case AnimationInterface::LRWPAN:
+      case AnimationInterface::LORAWAN:
         {
-          pendingPackets = &m_pendingLrWpanPackets;
-          break;
-        }
-      case AnimationInterface::WAVE:
-        {
-          pendingPackets = &m_pendingWavePackets;
+          pendingPackets = &m_pendingLoRaWANPackets;
           break;
         }
     }
@@ -1379,14 +1314,9 @@ AnimationInterface::ProtocolTypeToString (AnimationInterface::ProtocolType proto
           result = "LTE";
           break;
         }
-      case AnimationInterface::LRWPAN:
+      case AnimationInterface::LORAWAN:
         {
-          result = "LRWPAN";
-          break;
-        }
-      case AnimationInterface::WAVE:
-        {
-          result = "WAVE";
+          result = "LORAWAN";
           break;
         }
     }
@@ -1466,8 +1396,6 @@ AnimationInterface::StartAnimation (bool restart)
   WriteNodes ();
   WriteNodeColors ();
   WriteLinkProperties ();
-  WriteIpv4Addresses ();
-  WriteIpv6Addresses ();
   WriteNodeSizes ();
   WriteNodeEnergies ();
   if (!restart)
@@ -1481,37 +1409,8 @@ void
 AnimationInterface::AddToIpv4AddressNodeIdTable (std::string ipv4Address, uint32_t nodeId)
 {
   m_ipv4ToNodeIdMap[ipv4Address] = nodeId;
-  m_nodeIdIpv4Map.insert(NodeIdIpv4Pair(nodeId, ipv4Address));
 }
 
-void 
-AnimationInterface::AddToIpv4AddressNodeIdTable (std::vector<std::string> ipv4Addresses, uint32_t nodeId)
-{
-  for (std::vector<std::string>::const_iterator i = ipv4Addresses.begin ();
-	  i != ipv4Addresses.end ();
-	  ++i)
-    {
-	  AddToIpv4AddressNodeIdTable (*i, nodeId);
-    }
-}
-
-void
-AnimationInterface::AddToIpv6AddressNodeIdTable(std::string ipv6Address, uint32_t nodeId)
-{
-	m_ipv6ToNodeIdMap[ipv6Address] = nodeId;
-	m_nodeIdIpv6Map.insert(NodeIdIpv6Pair(nodeId, ipv6Address));
-}
-
-void
-AnimationInterface::AddToIpv6AddressNodeIdTable(std::vector<std::string> ipv6Addresses, uint32_t nodeId)
-{
-	for (std::vector<std::string>::const_iterator i = ipv6Addresses.begin();
-		i != ipv6Addresses.end();
-		++i)
-	{
-		AddToIpv6AddressNodeIdTable(*i, nodeId);
-	}
-}
 
 // Callbacks
 void 
@@ -1676,25 +1575,49 @@ AnimationInterface::ConnectCallbacks ()
   Config::Connect ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxDrop",
                    MakeCallback (&AnimationInterface::WifiPhyRxDropTrace, this));
 
-  // LrWpan
-  Config::Connect ("NodeList/*/DeviceList/*/$ns3::LrWpanNetDevice/Phy/PhyTxBegin",
-                   MakeCallback (&AnimationInterface::LrWpanPhyTxBeginTrace, this));
-  Config::Connect ("NodeList/*/DeviceList/*/$ns3::LrWpanNetDevice/Phy/PhyRxBegin",
-                   MakeCallback (&AnimationInterface::LrWpanPhyRxBeginTrace, this));
-  Config::Connect ("/NodeList/*/DeviceList/*/$ns3::LrWpanNetDevice/Mac/MacTx",
-                   MakeCallback (&AnimationInterface::LrWpanMacTxTrace, this));
-  Config::Connect ("/NodeList/*/DeviceList/*/$ns3::LrWpanNetDevice/Mac/MacTxDrop",
-                   MakeCallback (&AnimationInterface::LrWpanMacTxDropTrace, this));
-  Config::Connect ("/NodeList/*/DeviceList/*/$ns3::LrWpanNetDevice/Mac/MacRx",
-                   MakeCallback (&AnimationInterface::LrWpanMacRxTrace, this));
-  Config::Connect ("/NodeList/*/DeviceList/*/$ns3::LrWpanNetDevice/Mac/MacRxDrop",
-                   MakeCallback (&AnimationInterface::LrWpanMacRxDropTrace, this));
+  // LoRaWAN Mac & Phy
+  // As LoRaWAN gateways have multiple Phy/Mac objects we can not use the config paths to connect the trace source, instead we do it manually:
+  for (NodeList::Iterator i = NodeList::Begin (); i != NodeList::End (); ++i)
+  {
+    Ptr<Node> node = *i;
+    Ptr<LoRaWANNetDevice> netDevice = DynamicCast<LoRaWANNetDevice> (node->GetDevice (0));
+    if (!netDevice)
+      continue;
+    LoRaWANDeviceType deviceType = netDevice->GetDeviceType ();
 
-  // Wave
-  Config::Connect ("/NodeList/*/DeviceList/*/$ns3::WaveNetDevice/PhyEntities/*/$ns3::WifiPhy/PhyTxBegin",
-                   MakeCallback (&AnimationInterface::WavePhyTxBeginTrace, this));
-  Config::Connect ("/NodeList/*/DeviceList/*/$ns3::WaveNetDevice/PhyEntities/*/$ns3::WifiPhy/PhyRxBegin",
-                   MakeCallback (&AnimationInterface::WavePhyRxBeginTrace, this));
+    // Generate the trace context:
+    // TODO: can we automatically generate a context from an ns-3 object?
+    std::string context;
+    std::stringstream out;
+    out << "/NodeList/" << std::to_string(node->GetId()) << "/DeviceList/" << "0" << "/"; // for reference: NodeList/*/DeviceList/*/
+    context = out.str();
+
+    if (deviceType == LORAWAN_DT_END_DEVICE_CLASS_A) {
+      Ptr<LoRaWANMac> mac = netDevice->GetMac ();
+      mac->TraceConnect("MacTx", context, MakeCallback (&AnimationInterface::LoRaWANMacTxTrace, this));
+      mac->TraceConnect("MacTxDrop", context, MakeCallback (&AnimationInterface::LoRaWANMacTxDropTrace, this));
+      mac->TraceConnect("MacRx", context, MakeCallback (&AnimationInterface::LoRaWANMacRxTrace, this));
+      mac->TraceConnect("MacRxDrop", context, MakeCallback (&AnimationInterface::LoRaWANMacRxDropTrace, this));
+
+      Ptr<LoRaWANPhy> phy = netDevice->GetPhy ();
+      phy->TraceConnect("PhyTxBegin", context, MakeCallback (&AnimationInterface::LoRaWANPhyTxBeginTrace, this));
+      phy->TraceConnect("PhyRxBegin", context, MakeCallback (&AnimationInterface::LoRaWANPhyRxBeginTrace, this));
+    } else if (deviceType == LORAWAN_DT_GATEWAY) {
+      for (auto &mac : netDevice->GetMacs ()) {
+        mac->TraceConnect("MacTx", context, MakeCallback (&AnimationInterface::LoRaWANMacTxTrace, this));
+        mac->TraceConnect("MacTxDrop", context, MakeCallback (&AnimationInterface::LoRaWANMacTxDropTrace, this));
+        mac->TraceConnect("MacRx", context, MakeCallback (&AnimationInterface::LoRaWANMacRxTrace, this));
+        mac->TraceConnect("MacRxDrop", context, MakeCallback (&AnimationInterface::LoRaWANMacRxDropTrace, this));
+      }
+
+      for (auto &phy : netDevice->GetPhys() ) {
+        phy->TraceConnect("PhyTxBegin", context, MakeCallback (&AnimationInterface::LoRaWANPhyTxBeginTrace, this));
+        phy->TraceConnect("PhyRxBegin", context, MakeCallback (&AnimationInterface::LoRaWANPhyRxBeginTrace, this));
+      }
+    } else{
+      NS_LOG_WARN ("Unknown LoRaWAN device type");
+    }
+  }
 }
 
 Vector 
@@ -1708,13 +1631,7 @@ AnimationInterface::UpdatePosition (Ptr <Node> n)
   else
    {
      NS_LOG_UNCOND ( "AnimationInterface WARNING:Node:" << n->GetId () << " Does not have a mobility model. Use SetConstantPosition if it is stationary");
-     Ptr<UniformRandomVariable> x = CreateObject<UniformRandomVariable> ();
-     x->SetAttribute ("Min", DoubleValue (0));
-     x->SetAttribute ("Max", DoubleValue (100));
-     Ptr<UniformRandomVariable> y = CreateObject<UniformRandomVariable> ();
-     y->SetAttribute ("Min", DoubleValue (0));
-     y->SetAttribute ("Max", DoubleValue (100));
-     m_nodeLocation[n->GetId ()] = Vector (int (x->GetValue ()), int (y->GetValue ()), 0);
+     m_nodeLocation[n->GetId ()] = Vector (0, 0, 0);
    }
   return m_nodeLocation[n->GetId ()];
 }
@@ -1775,133 +1692,6 @@ AnimationInterface::GetIpv4Address (Ptr <NetDevice> nd)
   return oss.str ();
 }
 
-std::string
-AnimationInterface::GetIpv6Address(Ptr <NetDevice> nd)
-{
-  Ptr<Ipv6> ipv6 = NodeList::GetNode(nd->GetNode()->GetId())->GetObject <Ipv6>();
-  if (!ipv6)
-    {
-      NS_LOG_WARN("Node: " << nd->GetNode()->GetId() << " No ipv4 object found");
-      return "::";
-    }
-  int32_t ifIndex = ipv6->GetInterfaceForDevice(nd);
-  if (ifIndex == -1)
-    {
-      NS_LOG_WARN("Node :" << nd->GetNode()->GetId() << " Could not find index of NetDevice");
-      return "::";
-    }
-  bool nonLinkLocalFound = false;
-  uint32_t nAddresses = ipv6->GetNAddresses(ifIndex);
-  Ipv6InterfaceAddress addr;
-  for (uint32_t addressIndex = 0; addressIndex < nAddresses; ++addressIndex)
-    {
-      addr = ipv6->GetAddress(ifIndex, addressIndex);
-      if (!addr.GetAddress().IsLinkLocal())
-        {
-          nonLinkLocalFound = true;
-	  break;
-        }
-    }
-  if (!nonLinkLocalFound)
-    addr = ipv6->GetAddress(ifIndex, 0);
-  std::ostringstream oss;
-  oss << addr.GetAddress();
-  return oss.str();
-}
-
-
-
-std::vector<std::string>
-AnimationInterface::GetIpv4Addresses (Ptr <NetDevice> nd)
-{
-  std::vector<std::string> ipv4Addresses;
-  Ptr<Ipv4> ipv4 = NodeList::GetNode (nd->GetNode ()->GetId ())->GetObject <Ipv4> ();
-  if (!ipv4)
-    {
-      NS_LOG_WARN ("Node: " << nd->GetNode ()->GetId () << " No ipv4 object found");
-      return ipv4Addresses;
-    }
-  int32_t ifIndex = ipv4->GetInterfaceForDevice (nd);
-  if (ifIndex == -1)
-    {
-      NS_LOG_WARN ("Node :" << nd->GetNode ()->GetId () << " Could not find index of NetDevice");
-      return ipv4Addresses;
-    }
-  for (uint32_t index = 0; index < ipv4->GetNAddresses (ifIndex); ++index)
-    {
-      Ipv4InterfaceAddress addr = ipv4->GetAddress (ifIndex, index);
-      std::ostringstream oss;
-      oss << addr.GetLocal ();
-      ipv4Addresses.push_back(oss.str ());
-    }
-  return ipv4Addresses;
-}
-
-std::vector<std::string>
-AnimationInterface::GetIpv6Addresses(Ptr <NetDevice> nd)
-{
-  std::vector<std::string> ipv6Addresses;
-  Ptr<Ipv6> ipv6 = NodeList::GetNode (nd->GetNode ()->GetId ())->GetObject <Ipv6> ();
-  if (!ipv6)
-    {
-      NS_LOG_WARN("Node: " << nd->GetNode ()->GetId () << " No ipv6 object found");
-      return ipv6Addresses;
-    }
-  int32_t ifIndex = ipv6->GetInterfaceForDevice (nd);
-  if (ifIndex == -1)
-    {
-      NS_LOG_WARN("Node :" << nd->GetNode ()->GetId () << " Could not find index of NetDevice");
-      return ipv6Addresses;
-    }
-  for (uint32_t index = 0; index < ipv6->GetNAddresses (ifIndex); ++index)
-    {
-      Ipv6InterfaceAddress addr = ipv6->GetAddress (ifIndex, index);
-      std::ostringstream oss;
-      oss << addr.GetAddress ();
-      ipv6Addresses.push_back (oss.str ());
-    }
-  return ipv6Addresses;
-}
-
-
-void
-AnimationInterface::WriteIpv4Addresses ()
-{
-  for (NodeIdIpv4Map::const_iterator i = m_nodeIdIpv4Map.begin ();
-       i != m_nodeIdIpv4Map.end();
-       ++i)
-    {
-      std::vector <std::string> ipv4Addresses;
-      std::pair<NodeIdIpv4Map::const_iterator, NodeIdIpv4Map::const_iterator> iterPair = m_nodeIdIpv4Map.equal_range (i->first);
-      for (NodeIdIpv4Map::const_iterator it = iterPair.first;
-          it != iterPair.second; 
-          ++it)
-        {
-          ipv4Addresses.push_back (it->second);
-	}
-      WriteXmlIpv4Addresses (i->first, ipv4Addresses);
-    }
-}
-
-void
-AnimationInterface::WriteIpv6Addresses()
-{
-  for (NodeIdIpv6Map::const_iterator i = m_nodeIdIpv6Map.begin ();
-       i != m_nodeIdIpv6Map.end ();
-       i = m_nodeIdIpv6Map.upper_bound (i->first))
-    {
-      std::vector <std::string> ipv6Addresses;
-      std::pair<NodeIdIpv6Map::const_iterator, NodeIdIpv6Map::const_iterator> iterPair = m_nodeIdIpv6Map.equal_range (i->first);
-      for (NodeIdIpv6Map::const_iterator it = iterPair.first;
-           it != iterPair.second; 
-           ++it)
-        {
-          ipv6Addresses.push_back (it->second);
-	}
-        WriteXmlIpv6Addresses (i->first, ipv6Addresses);
-    }
-}
-
 void 
 AnimationInterface::WriteLinkProperties ()
 {
@@ -1915,45 +1705,23 @@ AnimationInterface::WriteLinkProperties ()
         {
           Ptr<NetDevice> dev = n->GetDevice (i);
  	  NS_ASSERT (dev);
-	  Ptr<Channel>   ch = dev->GetChannel ();
-          std::string channelType = "Unknown channel";
-	  if (ch)
-            {
-	      channelType = ch->GetInstanceTypeId ().GetName ();
-	    }
-	  NS_LOG_DEBUG("Got ChannelType" << channelType);
-
-          if (!ch || (channelType != std::string("ns3::PointToPointChannel")))
+          Ptr<Channel>   ch = dev->GetChannel ();
+          if (!ch) 
             {
 	      NS_LOG_DEBUG ("No channel can't be a p2p device");
-	      /*
               // Try to see if it is an LTE NetDevice, which does not return a channel
               if ((dev->GetInstanceTypeId ().GetName () == "ns3::LteUeNetDevice") || 
                   (dev->GetInstanceTypeId ().GetName () == "ns3::LteEnbNetDevice")||
                   (dev->GetInstanceTypeId ().GetName () == "ns3::VirtualNetDevice"))
                 {
-                  WriteNonP2pLinkProperties (n->GetId (), GetIpv4Address (dev) + "~" + GetMacAddress (dev), channelType);
+                  WriteNonP2pLinkProperties (n->GetId (), GetIpv4Address (dev) + "~" + GetMacAddress (dev), dev->GetInstanceTypeId ().GetName ());
                   AddToIpv4AddressNodeIdTable (GetIpv4Address (dev), n->GetId ());
                 }
-	       */
-              std::vector<std::string> ipv4Addresses = GetIpv4Addresses (dev);
-	      AddToIpv4AddressNodeIdTable(ipv4Addresses, n->GetId ());
-	      std::vector<std::string> ipv6Addresses = GetIpv6Addresses (dev);
-              AddToIpv6AddressNodeIdTable(ipv6Addresses, n->GetId ());
-	      if (!ipv4Addresses.empty ())
-                {
-                   NS_LOG_INFO ("Writing Ipv4 link");
-	           WriteNonP2pLinkProperties(n->GetId (), GetIpv4Address (dev) + "~" + GetMacAddress (dev), channelType);
-		}
-	      else if (!ipv6Addresses.empty ())
-	        {
-                  NS_LOG_INFO ("Writing Ipv6 link");
-                  WriteNonP2pLinkProperties(n->GetId (), GetIpv6Address (dev) + "~" + GetMacAddress (dev), channelType);
-		}
               continue;
             }
-
-         else if (channelType == std::string ("ns3::PointToPointChannel"))
+          std::string channelType = ch->GetInstanceTypeId ().GetName ();
+          NS_LOG_DEBUG ("Got ChannelType" << channelType);
+          if (channelType == std::string ("ns3::PointToPointChannel"))
             { // Since these are duplex links, we only need to dump
               // if srcid < dstid
               uint32_t nChDev = ch->GetNDevices ();
@@ -1963,32 +1731,24 @@ AnimationInterface::WriteLinkProperties ()
                   uint32_t n2Id = chDev->GetNode ()->GetId ();
                   if (n1Id < n2Id)
                     { 
-
-                      std::vector<std::string> ipv4Addresses = GetIpv4Addresses (dev);
-                      AddToIpv4AddressNodeIdTable (ipv4Addresses, n1Id);
-                      ipv4Addresses = GetIpv4Addresses (chDev);
-	              AddToIpv4AddressNodeIdTable (ipv4Addresses, n2Id);
-		      std::vector<std::string> ipv6Addresses = GetIpv6Addresses (dev);
-		      AddToIpv6AddressNodeIdTable(ipv6Addresses, n1Id);
-	              ipv6Addresses = GetIpv6Addresses (chDev);
-                      AddToIpv6AddressNodeIdTable(ipv6Addresses, n2Id);
-
+                      // ouptut the p2p link
+                      NS_LOG_INFO ("Link:" << GetIpv4Address (dev) << ":" << GetMacAddress (dev) << "----" << GetIpv4Address (chDev) << ":" << GetMacAddress (chDev));
+                      AddToIpv4AddressNodeIdTable (GetIpv4Address (dev), n1Id);
+                      AddToIpv4AddressNodeIdTable (GetIpv4Address (chDev), n2Id);
                       P2pLinkNodeIdPair p2pPair;
                       p2pPair.fromNode = n1Id;
                       p2pPair.toNode = n2Id;
-		      if (!ipv4Addresses.empty ())
-		        {
-                          LinkProperties lp = { GetIpv4Address (dev) + "~" + GetMacAddress (dev), GetIpv4Address (chDev) + "~" + GetMacAddress (chDev), "" };
-			  m_linkProperties[p2pPair] = lp;
-		        }
-		      else if (!ipv6Addresses.empty ())
-		        {
-		          LinkProperties lp = { GetIpv6Address (dev) + "~" + GetMacAddress (dev), GetIpv6Address (chDev) + "~" + GetMacAddress (chDev), "" };
-			  m_linkProperties[p2pPair] = lp;
-		        }
+                      LinkProperties lp = {GetIpv4Address (dev) + "~" + GetMacAddress (dev), GetIpv4Address (chDev) + "~" + GetMacAddress (chDev), ""};
+                      m_linkProperties[p2pPair] = lp;
                       WriteXmlLink (n1Id, 0, n2Id);
                     }
                 }
+            }
+          else
+            {
+              NS_LOG_INFO ("Link:" << GetIpv4Address (dev) << " Channel Type:" << channelType << " Mac: " << GetMacAddress (dev));
+              WriteNonP2pLinkProperties (n->GetId (), GetIpv4Address (dev) + "~" + GetMacAddress (dev), channelType); 
+              AddToIpv4AddressNodeIdTable (GetIpv4Address (dev), n->GetId ());
             }
         }
     }
@@ -2400,7 +2160,8 @@ AnimationInterface::WriteXmlAnim (bool routing)
       element.AddAttribute ("filetype", "routing");
       f = m_routingF;
     }
-  WriteN (element.ToString (false) + ">\n", f);
+  element.Close ();
+  WriteN (element.GetElementString (), f);
 }
 
 void 
@@ -2425,7 +2186,8 @@ AnimationInterface::WriteXmlNode (uint32_t id, uint32_t sysId, double locX, doub
   element.AddAttribute ("sysId", sysId);
   element.AddAttribute ("locX", locX);
   element.AddAttribute ("locY", locY);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2436,7 +2198,8 @@ AnimationInterface::WriteXmlUpdateLink (uint32_t fromId, uint32_t toId, std::str
   element.AddAttribute ("fromId", fromId);
   element.AddAttribute ("toId", toId);
   element.AddAttribute ("ld", linkDescription, true);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2465,39 +2228,8 @@ AnimationInterface::WriteXmlLink (uint32_t fromId, uint32_t toLp, uint32_t toId)
   element.AddAttribute ("fd", lprop.fromNodeDescription, true); 
   element.AddAttribute ("td", lprop.toNodeDescription, true); 
   element.AddAttribute ("ld", lprop.linkDescription, true); 
-  WriteN (element.ToString (), m_f);
-}
-
-void
-AnimationInterface::WriteXmlIpv4Addresses (uint32_t nodeId, std::vector<std::string> ipv4Addresses)
-{
-  AnimXmlElement element ("ip");
-  element.AddAttribute ("n", nodeId);
-  for (std::vector<std::string>::const_iterator i = ipv4Addresses.begin ();
-       i != ipv4Addresses.end ();
-       ++i)
-    {
-      AnimXmlElement valueElement ("address");
-      valueElement.SetText (*i);
-      element.AppendChild(valueElement);
-    }
-  WriteN (element.ToString (), m_f);
-}
-
-void
-AnimationInterface::WriteXmlIpv6Addresses (uint32_t nodeId, std::vector<std::string> ipv6Addresses)
-{
-  AnimXmlElement element ("ipv6");
-  element.AddAttribute("n", nodeId);
-  for (std::vector<std::string>::const_iterator i = ipv6Addresses.begin ();
-       i != ipv6Addresses.end ();
-       ++i)
-    {
-      AnimXmlElement valueElement ("address");
-      valueElement.SetText (*i);
-      element.AppendChild (valueElement);
-    }
-  WriteN(element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2507,7 +2239,8 @@ AnimationInterface::WriteXmlRouting (uint32_t nodeId, std::string routingInfo)
   element.AddAttribute ("t", Simulator::Now ().GetSeconds ());
   element.AddAttribute ("id", nodeId);
   element.AddAttribute ("info", routingInfo.c_str (), true);
-  WriteN (element.ToString (), m_routingF);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_routingF);
 }
 
 void 
@@ -2519,6 +2252,8 @@ AnimationInterface::WriteXmlRp (uint32_t nodeId, std::string destination, Ipv4Ro
   element.AddAttribute ("id", nodeId);
   element.AddAttribute ("d", destination.c_str ());
   element.AddAttribute ("c", rpElements.size ());
+  element.CloseTag ();
+  element.AddLineBreak ();
   for (Ipv4RoutePathElements::const_iterator i = rpElements.begin ();
        i != rpElements.end ();
        ++i)
@@ -2527,9 +2262,11 @@ AnimationInterface::WriteXmlRp (uint32_t nodeId, std::string destination, Ipv4Ro
       AnimXmlElement rpeElement ("rpe");
       rpeElement.AddAttribute ("n", rpElement.nodeId);
       rpeElement.AddAttribute ("nH", rpElement.nextHop.c_str ());
-      element.AppendChild (rpeElement);
+      rpeElement.CloseElement ();
+      element.Add (rpeElement);
     }
-  WriteN (element.ToString (),  m_routingF);
+  element.CloseElement ();
+  WriteN (element.GetElementString (),  m_routingF);
 }
 
 
@@ -2544,7 +2281,8 @@ AnimationInterface::WriteXmlPRef (uint64_t animUid, uint32_t fId, double fbTx, s
     {
       element.AddAttribute ("meta-info", metaInfo.c_str (), true);
     }
-  WriteN (element.ToString (),  m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (),  m_f);
 }
 
 void 
@@ -2555,7 +2293,8 @@ AnimationInterface::WriteXmlP (uint64_t animUid, std::string pktType, uint32_t t
   element.AddAttribute ("tId", tId);
   element.AddAttribute ("fbRx", fbRx);
   element.AddAttribute ("lbRx", lbRx);
-  WriteN (element.ToString (),  m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (),  m_f);
 }
 
 void 
@@ -2573,7 +2312,8 @@ AnimationInterface::WriteXmlP (std::string pktType, uint32_t fId, double fbTx, d
   element.AddAttribute ("tId", tId);
   element.AddAttribute ("fbRx", fbRx);
   element.AddAttribute ("lbRx", lbRx);
-  WriteN (element.ToString (),  m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (),  m_f);
 }
 
 void 
@@ -2583,7 +2323,8 @@ AnimationInterface::WriteXmlAddNodeCounter (uint32_t nodeCounterId, std::string 
   element.AddAttribute ("ncId", nodeCounterId);
   element.AddAttribute ("n", counterName);
   element.AddAttribute ("t", CounterTypeToString (counterType));
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2592,7 +2333,8 @@ AnimationInterface::WriteXmlAddResource (uint32_t resourceId, std::string resour
   AnimXmlElement element ("res");
   element.AddAttribute ("rid", resourceId);
   element.AddAttribute ("p", resourcePath);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2603,7 +2345,8 @@ AnimationInterface::WriteXmlUpdateNodeImage (uint32_t nodeId, uint32_t resourceI
   element.AddAttribute ("t", Simulator::Now ().GetSeconds ());
   element.AddAttribute ("id", nodeId);
   element.AddAttribute ("rid", resourceId);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2615,7 +2358,8 @@ AnimationInterface::WriteXmlUpdateNodeSize (uint32_t nodeId, double width, doubl
   element.AddAttribute ("id", nodeId);
   element.AddAttribute ("w", width);
   element.AddAttribute ("h", height);
-  WriteN (element.ToString (),  m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (),  m_f);
 }
 
 void 
@@ -2627,7 +2371,8 @@ AnimationInterface::WriteXmlUpdateNodePosition (uint32_t nodeId, double x, doubl
   element.AddAttribute ("id", nodeId);
   element.AddAttribute ("x", x);
   element.AddAttribute ("y", y);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2640,7 +2385,8 @@ AnimationInterface::WriteXmlUpdateNodeColor (uint32_t nodeId, uint8_t r, uint8_t
   element.AddAttribute ("r", (uint32_t) r);
   element.AddAttribute ("g", (uint32_t) g);
   element.AddAttribute ("b", (uint32_t) b);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2654,7 +2400,8 @@ AnimationInterface::WriteXmlUpdateNodeDescription (uint32_t nodeId)
     {
       element.AddAttribute ("descr", m_nodeDescriptions[nodeId], true); 
     }
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 
@@ -2666,7 +2413,8 @@ AnimationInterface::WriteXmlUpdateNodeCounter (uint32_t nodeCounterId, uint32_t 
   element.AddAttribute ("i", nodeId);
   element.AddAttribute ("t", Simulator::Now ().GetSeconds ());
   element.AddAttribute ("v", counterValue);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
@@ -2679,133 +2427,118 @@ AnimationInterface::WriteXmlUpdateBackground (std::string fileName, double x, do
   element.AddAttribute ("sx", scaleX);
   element.AddAttribute ("sy", scaleY);
   element.AddAttribute ("o", opacity);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 void 
-AnimationInterface::WriteXmlNonP2pLinkProperties (uint32_t id, std::string ipAddress, std::string channelType)
+AnimationInterface::WriteXmlNonP2pLinkProperties (uint32_t id, std::string ipv4Address, std::string channelType)
 {
   AnimXmlElement element ("nonp2plinkproperties");
   element.AddAttribute ("id", id);
-  element.AddAttribute ("ipAddress", ipAddress);
+  element.AddAttribute ("ipv4Address", ipv4Address);
   element.AddAttribute ("channelType", channelType);
-  WriteN (element.ToString (), m_f);
+  element.CloseElement ();
+  WriteN (element.GetElementString (), m_f);
 }
 
 
 
 /***** AnimXmlElement  *****/
 
-AnimationInterface::AnimXmlElement::AnimXmlElement(std::string tagName, bool emptyElement) :
-	m_tagName(tagName),
-	m_text("")
+AnimationInterface::AnimXmlElement::AnimXmlElement (std::string tagName, bool emptyElement):
+                                                    m_tagName (tagName),
+                                                    m_emptyElement (emptyElement)
 {
+  m_elementString = "<" + tagName + " ";
 }
 
 template <typename T>
 void
-AnimationInterface::AnimXmlElement::AddAttribute(std::string attribute, T value, bool xmlEscape)
+AnimationInterface::AnimXmlElement::AddAttribute (std::string attribute, T value, bool xmlEscape)
 {
-	std::ostringstream oss;
-	oss << std::setprecision(10);
-	oss << value;
-	std::string attributeString = attribute.c_str();
-	if (xmlEscape)
-	{
-		attributeString += "=\"";
-		std::string valueStr = oss.str();
-		for (std::string::iterator it = valueStr.begin(); it != valueStr.end(); ++it)
-		{
-			switch (*it)
-			{
-			case '&':
-				attributeString += "&amp;";
-				break;
-			case '\"':
-				attributeString += "&quot;";
-				break;
-			case '\'':
-				attributeString += "&apos;";
-				break;
-			case '<':
-				attributeString += "&lt;";
-				break;
-			case '>':
-				attributeString += "&gt;";
-				break;
-			default:
-				attributeString += *it;
-				break;
-			}
-		}
-		attributeString += "\" ";
-	}
-	else
-	{
-		attributeString += "=\"" + oss.str() + "\" ";
-	}
-	m_attributes.push_back(attributeString);
+  std::ostringstream oss;
+  oss << std::setprecision (10);
+  oss << value;
+  m_elementString += attribute.c_str ();
+  if (xmlEscape)
+    {
+      m_elementString += "=\"";
+      std::string valueStr = oss.str ();
+      for (std::string::iterator it = valueStr.begin (); it != valueStr.end (); ++it)
+        {
+          switch (*it)
+            {
+              case '&':
+                m_elementString += "&amp;";
+                break;
+              case '\"':
+                m_elementString += "&quot;";
+                break;
+              case '\'':
+                m_elementString += "&apos;";
+                break;
+              case '<':
+                m_elementString += "&lt;";
+                break;
+              case '>':
+                m_elementString += "&gt;";
+                break;
+              default:
+                m_elementString += *it;
+                break;
+            }
+        }
+      m_elementString += "\" ";
+    }
+  else
+    {
+      m_elementString += "=\"" + oss.str () + "\" ";
+    }
 }
 
 void
-AnimationInterface::AnimXmlElement::AppendChild(AnimXmlElement e)
+AnimationInterface::AnimXmlElement::Close ()
 {
-	m_children.push_back(e.ToString());
+  m_elementString += ">\n";
 }
 
 void
-AnimationInterface::AnimXmlElement::SetText(std::string text)
+AnimationInterface::AnimXmlElement::CloseElement ()
 {
-	m_text = text;
+  if (m_emptyElement)
+    {
+      m_elementString += "/>\n";
+    }
+  else
+   {
+     m_elementString += "</" + m_tagName + ">\n";
+   }
+}
+
+void
+AnimationInterface::AnimXmlElement::CloseTag ()
+{
+  m_elementString += ">";
+}
+
+void
+AnimationInterface::AnimXmlElement::AddLineBreak ()
+{
+  m_elementString += "\n";
+}
+
+void
+AnimationInterface::AnimXmlElement::Add (AnimXmlElement e)
+{
+  m_elementString += e.GetElementString ();
 }
 
 std::string
-AnimationInterface::AnimXmlElement::ToString(bool autoClose)
+AnimationInterface::AnimXmlElement::GetElementString ()
 {
-	std::string elementString = "<" + m_tagName + " ";
-
-	
-		for (std::vector<std::string>::const_iterator i = m_attributes.begin();
-			i != m_attributes.end();
-			++i)
-		{
-			elementString += *i;
-		}
-		if (m_children.empty() && m_text.empty())
-		{
-			if (autoClose)
-			{ 
-				elementString += "/>";
-			}
-		}
-		else
-		{ 
-			elementString += ">";
-			if (!m_text.empty())
-			{
-				elementString += m_text;
-			}
-			if (!m_children.empty())
-			{
-				elementString += "\n";
-				for (std::vector<std::string>::const_iterator i = m_children.begin();
-					i != m_children.end();
-					++i)
-				{
-					elementString += *i + "\n";
-				}
-
-			}
-			if (autoClose)
-			{
-				elementString += "</" + m_tagName + ">";
-			}
-		}
-
-	
-	return elementString + ((autoClose) ?"\n": "");
+  return m_elementString;
 }
-
 
 
 

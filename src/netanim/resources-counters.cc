@@ -42,6 +42,12 @@ struct rgb colors [] = {
                         { 0, 0, 255 }  // Green
                         };
 
+uint32_t resourceId1;
+uint32_t resourceId2;
+uint32_t nodeCounterIdUint32;
+uint32_t nodeCounterIdDouble1;
+uint32_t nodeCounterIdDouble2;
+
 void modify ()
 {
   std::ostringstream oss;
@@ -62,6 +68,18 @@ void modify ()
   std::ostringstream node0Oss;
   node0Oss << "-----Node:" << Simulator::Now ().GetSeconds ();
   pAnim->UpdateNodeDescription (2, node0Oss.str ());
+  static double size = 2;
+  static uint32_t currentResourceId = resourceId1;
+  pAnim->UpdateNodeSize (2, size, size);
+  pAnim->UpdateNodeImage (3, currentResourceId);
+  size *= 1.1;
+  if (size > 20)
+    size = 1;
+  pAnim->UpdateNodeSize (3, 10, 10);
+  if (currentResourceId == resourceId1)
+    currentResourceId = resourceId2;
+  else
+    currentResourceId = resourceId1;    
 
   // Every update change the color for node 4
   static uint32_t index = 0;
@@ -72,10 +90,18 @@ void modify ()
   for (uint32_t nodeId = 4; nodeId < 12; ++nodeId)
     pAnim->UpdateNodeColor (nodeId, color.r, color.g, color.b); 
 
+  // Update Node Counter for node 0 and node 5, use some random number between 0 to 1000 for value
+  Ptr <UniformRandomVariable> rv = CreateObject<UniformRandomVariable> ();
+  pAnim->UpdateNodeCounter (nodeCounterIdUint32, 0, rv->GetValue (0, 1000));
+  pAnim->UpdateNodeCounter (nodeCounterIdDouble1, 0, rv->GetValue (100.0, 200.0));
+  pAnim->UpdateNodeCounter (nodeCounterIdDouble2, 0, rv->GetValue (300.0, 400.0));
+  pAnim->UpdateNodeCounter (nodeCounterIdUint32, 5, rv->GetValue (0, 1000));
+  pAnim->UpdateNodeCounter (nodeCounterIdDouble1, 5, rv->GetValue (100.0, 200.0));
+  pAnim->UpdateNodeCounter (nodeCounterIdDouble2, 5, rv->GetValue (300.0, 400.0));
 
   if (Simulator::Now ().GetSeconds () < 10) // This is important or the simulation
     // will run endlessly
-    Simulator::Schedule (Seconds (1), modify);
+    Simulator::Schedule (Seconds (0.1), modify);
 
 }
 
@@ -87,7 +113,7 @@ int main (int argc, char *argv[])
   uint32_t    nLeftLeaf = 5;
   uint32_t    nRightLeaf = 5;
   uint32_t    nLeaf = 0; // If non-zero, number of both left and right
-  std::string animFile = "dynamic_linknode.xml" ;  // Name of file for animation output
+  std::string animFile = "resources_demo.xml" ;  // Name of file for animation output
 
   CommandLine cmd;
   cmd.AddValue ("nLeftLeaf", "Number of left side leaf nodes", nLeftLeaf);
@@ -141,14 +167,25 @@ int main (int argc, char *argv[])
     }
 
   clientApps.Start (Seconds (0.0));
-  clientApps.Stop (Seconds (10.0));
+  clientApps.Stop (Seconds (5.0));
 
   // Set the bounding box for animation
 
 
   // Create the animation object and configure for specified output
-  pAnim = new AnimationInterface (animFile);
-  Simulator::Schedule (Seconds (1), modify);
+  pAnim = new AnimationInterface (animFile); 
+  // Provide the absolute path to the resource
+  resourceId1 = pAnim->AddResource ("/Users/john/ns3/netanim-3.105/ns-3-logo1.png");
+  resourceId2 = pAnim->AddResource ("/Users/john/ns3/netanim-3.105/ns-3-logo2.png");
+  pAnim->SetBackgroundImage ("/Users/john/ns3/netanim-3.105/ns-3-background.png", 0, 0, 0.2, 0.2, 0.1);
+
+
+  // Add a node counter
+  nodeCounterIdUint32 = pAnim->AddNodeCounter ("Uint32 Counter", AnimationInterface::UINT32_COUNTER);
+  nodeCounterIdDouble1 = pAnim->AddNodeCounter ("Double Counter 1", AnimationInterface::DOUBLE_COUNTER);
+  nodeCounterIdDouble2 = pAnim->AddNodeCounter ("Double Counter 2", AnimationInterface::DOUBLE_COUNTER);
+
+  Simulator::Schedule (Seconds (0.1), modify);
   
   // Set up the acutal simulation
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
@@ -159,3 +196,4 @@ int main (int argc, char *argv[])
   delete pAnim;
   return 0;
 }
+
