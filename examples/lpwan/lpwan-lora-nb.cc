@@ -23,6 +23,10 @@
 #include <ns3/lte-module.h>
 #include <ns3/buildings-helper.h>
 
+#include "ns3/internet-module.h"
+#include "ns3/applications-module.h"
+#include "ns3/point-to-point-helper.h"
+
 #include <ns3/netanim-module.h>
 #include "ns3/config-store.h"
 #include <iostream>
@@ -70,6 +74,7 @@ class LpwanTracing {
     void SetDRCalcPerLimit (double drCalcPerLimit);
     void SetDrCalcFixedDrIndex (uint8_t fixedDataRateIndex);
 
+    void TestNb();
   private:
     uint32_t m_nLoraDevices;
     uint32_t m_nLoraGateways;
@@ -119,13 +124,17 @@ class LpwanTracing {
   private:
     void LoraCreateNodes ();
     void NbCreateNodes ();
+
     void SetupMobility ();
-    void CreateDevices ();
+    //void NbSetupMobility();
+
     void LoraCreateDevices ();
     void NbCreateDevices ();
-    //void SetupTracing (bool tracePhyTransmissions, bool tracePhyStates, bool traceMacPackets, bool traceMacStates, bool traceEdMsgs, bool traceNsDsMsgs, bool traceMisc);
+
     void LoraInstallApplications();
-   //void NbInstallApplications();
+    void NbInstallApplications();
+
+    //void SetupTracing (bool tracePhyTransmissions, bool tracePhyStates, bool traceMacPackets, bool traceMacStates, bool traceEdMsgs, bool traceNsDsMsgs, bool traceMisc);
 };
 
 int main (int argc, char *argv[]) {
@@ -138,7 +147,7 @@ int main (int argc, char *argv[]) {
   double discRadius = 5000.0;
   double totalTime = 600.0;
   uint32_t nRuns = 1;
-  uint32_t drCalcMethodIndex = 0;
+  uint32_t drCalcMethodIndex = 2;
   double drCalcPerLimit = 0.01;
   double drCalcFixedDRIndex = 0;
   uint32_t usPacketSize = 21;
@@ -266,9 +275,6 @@ int main (int argc, char *argv[]) {
     uint32_t seed = randomSeed + i;
     SeedManager::SetSeed (seed);
 
-    //std::ostringstream simRunFilesPrefix;
-    //simRunFilesPrefix << outputFileNamePrefix << "-" << unix_epoch << "-" << std::to_string(i);
-
     LpwanTracing example = LpwanTracing ();
     example.SelectDRCalculationMethod (loRaWANDataRateCalcMethodIndex);
     example.SetDRCalcPerLimit (drCalcPerLimit);
@@ -362,6 +368,9 @@ void LpwanTracing::CaseRun(
   ConfigStore inputConfig;
   inputConfig.ConfigureDefaults ();
 
+  //lteHelper->EnableTraces ();
+  //lteHelper->EnableRlcTraces (); 
+
   // Create all nodes Gateways and Devices
   LoraCreateNodes ();
   NbCreateNodes ();
@@ -374,7 +383,7 @@ void LpwanTracing::CaseRun(
   NbCreateDevices ();
 
   LoraInstallApplications ();
-  //NbInstallApplications ();
+  NbInstallApplications ();
 
   //SetupTracing (tracePhyTransmissions, tracePhyStates, traceMacPackets, traceMacStates, traceEdMsgs, traceNsDsMsgs, traceMisc);
   //OutputNodesToFile ();
@@ -390,6 +399,7 @@ void LpwanTracing::CaseRun(
   Simulator::Run ();
 
   Simulator::Destroy ();
+  std::cout << "Fim\n";
 }
 
 /*****************************************************
@@ -419,14 +429,13 @@ void LpwanTracing::SetupMobility () {
   edMobility.Install (m_loraEndDeviceNodes);
   edMobility.Install (m_nbEndDeviceNodes);
 
-  MobilityHelper gwMobility;
   Ptr<ListPositionAllocator> nodePositionList = CreateObject<ListPositionAllocator> ();
 
   //Vector v1 = Vector(-m_discRadius/2 + 0*m_discRadius, 0.0, 0.0);
   Vector v1 = Vector(0.0, 0.0, 0.0);
-  //Vector v2 = Vector(-m_discRadius/2 + 1*m_discRadius, 0.0, 0.0);
+  Vector v2 = Vector(-m_discRadius/2 + 1*m_discRadius, 0.0, 0.0);
   nodePositionList->Add (v1);
-  //nodePositionList->Add (v2);
+  nodePositionList->Add (v2);
   /*for (uint32_t i = 0; i < m_nLoraGateways; i++) {
     Vector v;
     if (m_nLoraGateways == 1) {
@@ -442,29 +451,35 @@ void LpwanTracing::SetupMobility () {
     nodePositionList->Add (v);
   }*/
 
+  MobilityHelper gwMobility;
   gwMobility.SetPositionAllocator (nodePositionList);
   gwMobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   gwMobility.Install (m_loraGatewayNodes);
   gwMobility.Install (m_nbGatewayNodes);
 }
 
+/*void LpwanTracing::NbSetupMobility() {
+
+  std::cout << "Set Mobility for NB-IoT devices\n";
+  MobilityHelper mobility;
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (m_nbGatewayNodes);
+  BuildingsHelper::Install (m_nbGatewayNodes);
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (m_nbEndDeviceNodes);
+  BuildingsHelper::Install (m_nbEndDeviceNodes);
+}*/
+
 void LpwanTracing::NbCreateDevices () {
   lteHelper = CreateObject<LteHelper> ();
  
   m_nbGWDevices = lteHelper->InstallEnbDevice (m_nbGatewayNodes);
   m_nbEDDevices = lteHelper->InstallUeDevice (m_nbEndDeviceNodes);
-  lteHelper->Attach(m_nbEDDevices, m_nbGWDevices.Get (0));
-
-  enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
-  EpsBearer bearer (q);
-
-  lteHelper->ActivateDataRadioBearer(m_nbEDDevices, bearer);
-  //lteHelper->EnableTraces ();
 }
 
 void LpwanTracing::LoraCreateDevices () {
   LoRaWANHelper lorawanHelper;
-  lorawanHelper.EnableLogComponents (LOG_LEVEL_INFO);
+  //lorawanHelper.EnableLogComponents (LOG_LEVEL_INFO);
 
   lorawanHelper.SetNbRep (m_usUnconfirmedDataNbRep);
   m_loraEDDevices = lorawanHelper.Install (m_loraEndDeviceNodes);
@@ -565,7 +580,7 @@ uint8_t LpwanTracing::CalculateDataRateIndexPER (Ptr<Application> endDeviceApp) 
   // !!!Important!!! we assume that the experiment is using only the LogDistancePropagationLossModel here
   Ptr<PropagationLossModel> lossModel = CreateObject<LogDistancePropagationLossModel> (); // TODO: can we get the loss model from the end device node object ?
   Ptr<MobilityModel> endDeviceMobility = endDeviceNode->GetObject<MobilityModel> ();
-  NS_ASSERT (endDeviceMobility);
+  //NS_ASSERT (endDeviceMobility);
 
   // find lowest path loss (or highest rx power) for all gateways
   double maxRxPowerdBm = std::numeric_limits<double>::lowest (); // note: numeric_limits::min() returns minimum positive normalized value for floating point types
@@ -573,7 +588,7 @@ uint8_t LpwanTracing::CalculateDataRateIndexPER (Ptr<Application> endDeviceApp) 
   for (NodeContainer::Iterator it = m_loraGatewayNodes.Begin (); 
       it != m_loraGatewayNodes.End (); ++it) {
     Ptr<MobilityModel> gatewayMobility = (*it)->GetObject<MobilityModel> ();
-    NS_ASSERT (gatewayMobility);
+    //NS_ASSERT (gatewayMobility);
 
     const double rxPowerdBm = lossModel->CalcRxPower (14.0, endDeviceMobility, gatewayMobility); // 14.0 dBm TX power as this is max power for most EU868 sub bands
 
@@ -643,13 +658,101 @@ uint8_t LpwanTracing::CalculateFixedDataRateIndex (Ptr<Application> endDeviceApp
 }
 
 
-//void LpwanTracing::NbInstallApplications() {
-  //enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
-  //EpsBearer bearer (q);
-  //lteHelper->Attach(m_nbEDDevices, m_nbGWDevices.Get (0));
-  //lteHelper->ActivateDataRadioBearer(m_nbEDDevices, bearer);
-  //lteHelper->EnableTraces ();
-//}
+void LpwanTracing::NbInstallApplications() {
+
+
+  InternetStackHelper internet;
+  Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
+  Ptr<Node> pgw = epcHelper->GetPgwNode ();
+
+   // Create a single RemoteHost
+  NodeContainer remoteHostContainer;
+  remoteHostContainer.Create (1);
+  Ptr<Node> remoteHost = remoteHostContainer.Get (0);
+  internet.Install (remoteHostContainer);
+
+  // Create the Internet
+  PointToPointHelper p2ph;
+  p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
+  p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
+  p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
+  NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);
+  Ipv4AddressHelper ipv4h;
+  ipv4h.SetBase ("1.0.0.0", "255.0.0.0");
+  Ipv4InterfaceContainer internetIpIfaces = ipv4h.Assign (internetDevices);
+  // interface 0 is localhost, 1 is the p2p device
+  Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1);
+
+  Ipv4StaticRoutingHelper ipv4RoutingHelper;
+  Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
+  remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
+
+
+  // Install the IP stack on the UEs
+  internet.Install (m_nbEndDeviceNodes);
+  Ipv4InterfaceContainer ueIpIface;
+  ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (m_nbEDDevices));
+  // Assign IP address to UEs, and install applications
+  for (uint32_t u = 0; u < m_nbEndDeviceNodes.GetN (); ++u)
+  {
+    Ptr<Node> ueNode = m_nbEndDeviceNodes.Get (u);
+    // Set the default gateway for the UE
+    Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
+    ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
+  }
+
+  // Attach one UE per eNodeB
+  for (uint16_t i = 0; i < m_nNbDevices; i++)
+  {
+    lteHelper->Attach (m_nbEDDevices.Get(i), m_nbGWDevices.Get(i));
+    // side effect: the default EPS bearer will be activated
+  }
+
+
+  // Install and start applications on UEs and remote host
+  uint16_t dlPort = 1234;
+  uint16_t ulPort = 2000;
+  uint16_t otherPort = 3000;
+  ApplicationContainer clientApps;
+  ApplicationContainer serverApps;
+  for (uint32_t u = 0; u < m_nbEndDeviceNodes.GetN (); ++u)
+  {
+    ++ulPort;
+    ++otherPort;
+    PacketSinkHelper dlPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
+    PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
+    PacketSinkHelper packetSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), otherPort));
+    serverApps.Add (dlPacketSinkHelper.Install (m_nbEndDeviceNodes.Get(u)));
+    serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
+    serverApps.Add (packetSinkHelper.Install (m_nbEndDeviceNodes.Get(u)));
+
+    double interPacketInterval = 100;
+    UdpClientHelper dlClient (ueIpIface.GetAddress (u), dlPort);
+    dlClient.SetAttribute ("Interval", TimeValue (MilliSeconds(interPacketInterval)));
+    dlClient.SetAttribute ("MaxPackets", UintegerValue(1000000));
+
+    UdpClientHelper ulClient (remoteHostAddr, ulPort);
+    ulClient.SetAttribute ("Interval", TimeValue (MilliSeconds(interPacketInterval)));
+    ulClient.SetAttribute ("MaxPackets", UintegerValue(1000000));
+
+    UdpClientHelper client (ueIpIface.GetAddress (u), otherPort);
+    client.SetAttribute ("Interval", TimeValue (MilliSeconds(interPacketInterval)));
+    client.SetAttribute ("MaxPackets", UintegerValue(1000000));
+
+    clientApps.Add (dlClient.Install (remoteHost));
+    clientApps.Add (ulClient.Install (m_nbEndDeviceNodes.Get(u)));
+    if (u+1 < m_nbEndDeviceNodes.GetN ())
+    {
+      clientApps.Add (client.Install (m_nbEndDeviceNodes.Get(u+1)));
+    }
+    else
+    {
+      clientApps.Add (client.Install (m_nbEndDeviceNodes.Get(0)));
+    }
+  }
+  serverApps.Start (Seconds (0.01));
+  clientApps.Start (Seconds (0.01));
+}
 
 
 
