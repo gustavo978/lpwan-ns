@@ -4,6 +4,3 @@ def build(bld):
     obj = bld.create_ns3_program('experiment', ['lorawan', 'netanim'])
     obj.source = 'experiment.cc'
 
-#    obj = bld.create_ns3_program('lpwan-trancing', ['lorawan', 'netanim'])
-#    obj.source = 'lpwan-tracing.cc'
-
