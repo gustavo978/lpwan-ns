@@ -51,6 +51,8 @@ public:
   void CaseRun (
       NodeContainer loraEDNodeContainer,
       NodeContainer loraGWNodeContainer,
+      NodeContainer nbEDNodesContainer,
+      NodeContainer nbGWNodesContainer,
       NetDeviceContainer loraEDDevices,
       NetDeviceContainer loraGWDevices,
       uint32_t nLoraDevices,
@@ -136,41 +138,81 @@ public:
       Ptr<const Packet> packet, 
       bool insertNewLine = true);
 
-  static void MacTx (
+  static void edMacTx (
       LoRaWANExampleTracing* example, 
       Ptr<LoRaWANNetDevice> device, 
       Ptr<LoRaWANMac> mac, 
       Ptr<const Packet> packet);
 
-  static void MacTxOk(
+  static void edMacTxOk(
       LoRaWANExampleTracing* example, 
       Ptr<LoRaWANNetDevice> device, 
       Ptr<LoRaWANMac> mac, 
       Ptr<const Packet> packet);
 
-  static void MacTxDrop(
+  static void edMacTxDrop(
       LoRaWANExampleTracing* example, 
       Ptr<LoRaWANNetDevice> device, 
       Ptr<LoRaWANMac> mac, 
       Ptr<const Packet> packet);
 
-  static void MacRx(
+  static void edMacRx(
       LoRaWANExampleTracing* example, 
       Ptr<LoRaWANNetDevice> device, 
       Ptr<LoRaWANMac> mac, 
       Ptr<const Packet> packet);
 
-  static void MacRxDrop (LoRaWANExampleTracing* example, 
+  static void edMacRxDrop (LoRaWANExampleTracing* example, 
       Ptr<LoRaWANNetDevice> device, 
       Ptr<LoRaWANMac> mac, 
       Ptr<const Packet> packet);
 
-  static void MacSentPkt (
+  static void edMacSentPkt (
       LoRaWANExampleTracing* example, 
       Ptr<LoRaWANNetDevice> device, 
       Ptr<LoRaWANMac> mac, 
       Ptr<const Packet> packet, 
       uint8_t n_transmissions);
+
+  static void gwMacTx (
+      LoRaWANExampleTracing* example, 
+      Ptr<LoRaWANNetDevice> device, 
+      Ptr<LoRaWANMac> mac, 
+      Ptr<const Packet> packet);
+
+  static void gwMacTxOk(
+      LoRaWANExampleTracing* example, 
+      Ptr<LoRaWANNetDevice> device, 
+      Ptr<LoRaWANMac> mac, 
+      Ptr<const Packet> packet);
+
+  static void gwMacTxDrop(
+      LoRaWANExampleTracing* example, 
+      Ptr<LoRaWANNetDevice> device, 
+      Ptr<LoRaWANMac> mac, 
+      Ptr<const Packet> packet);
+
+  static void gwMacRx(
+      LoRaWANExampleTracing* example, 
+      Ptr<LoRaWANNetDevice> device, 
+      Ptr<LoRaWANMac> mac, 
+      Ptr<const Packet> packet);
+
+  static void gwMacRxDrop (LoRaWANExampleTracing* example, 
+      Ptr<LoRaWANNetDevice> device, 
+      Ptr<LoRaWANMac> mac, 
+      Ptr<const Packet> packet);
+
+  static void gwMacSentPkt (
+      LoRaWANExampleTracing* example, 
+      Ptr<LoRaWANNetDevice> device, 
+      Ptr<LoRaWANMac> mac, 
+      Ptr<const Packet> packet, 
+      uint8_t n_transmissions);
+
+  static void NBTx (LoRaWANExampleTracing* example);
+
+  static void NBRx (LoRaWANExampleTracing* example);
 
   static void PhyStateChangeNotification (
       LoRaWANExampleTracing* example, 
@@ -271,7 +313,25 @@ public:
 
   void WriteMiscStatsToFile ();
 
+  void PrintMacCounters();
 private:
+  uint32_t countEdMacTx;
+  uint32_t countEdMacTxOk;
+  uint32_t countEdMacTxDrop;
+  uint32_t countEdMacRx;
+  uint32_t countEdMacRxDrop;
+  uint32_t countEdSendPkt;
+
+  uint32_t countGwMacTx;
+  uint32_t countGwMacTxOk;;
+  uint32_t countGwMacTxDrop;
+  uint32_t countGwMacRx;
+  uint32_t countGwMacRxDrop;
+  uint32_t countGwSendPkt;
+
+  uint32_t count_nbtx;
+  uint32_t count_nbrx;
+
   uint32_t m_nLoraEndDevices;
   uint32_t m_nLoraGateways;
   uint32_t m_nNbEndDevices;
@@ -351,11 +411,11 @@ int main (int argc, char *argv[]) {
   uint32_t nLoraGateways = 2;
   uint32_t nNbGateways = 2;
   double discRadius = 5000.0;
-  uint32_t nRuns = 5;
+  uint32_t nRuns = 1;
   double drCalcPerLimit = 0.01;
   uint32_t drCalcMethodIndex = 2;
   double drCalcFixedDRIndex = 0;
-  double totalTime = 300.0;
+  double totalTime = 600.0;
   uint32_t usUnconfirmedDataNbRep = 1;
   uint32_t dsPacketSize = 21;
   bool dsDataGenerate = false;
@@ -363,8 +423,8 @@ int main (int argc, char *argv[]) {
   double dsDataExpMean = -1;
   uint32_t usPacketSize = 21;
   uint32_t usMaxBytes = 0;
-  bool usConfirmedData = false;
-  double usDataPeriod = 50.0;
+  bool usConfirmedData = true;
+  double usDataPeriod = 150.0;
   bool tracePhyTransmissions = true;
   bool tracePhyStates = true;
   bool traceMacPackets = true;
@@ -373,19 +433,6 @@ int main (int argc, char *argv[]) {
   bool traceNsDsMsgs = true;
   bool traceMisc = true;
   std::string outputFileNamePrefix = "output/LoRaWAN-example-tracing";
-
-  /*************************/
-  /* Variables             */
-  /*************************/
-  NodeContainer loraEDNodesContainer;
-  NodeContainer loraGWNodesContainer;
-  NodeContainer nbEDNodesContainer;
-  NodeContainer nbGWNodesContainer;
-
-  NetDeviceContainer loraEDDevices;
-  NetDeviceContainer loraGWDevices;
-  NetDeviceContainer nbEDDevices;
-  NetDeviceContainer nbGWDevices;
 
   CommandLine cmd;
   cmd.AddValue (
@@ -417,6 +464,20 @@ int main (int argc, char *argv[]) {
     uint32_t seed = randomSeed + i;
     SeedManager::SetSeed (seed);
     std::cout << "Run " << (unsigned) i << "\n";
+
+    /*************************/
+    /* Variables             */
+    /*************************/
+    NodeContainer loraEDNodesContainer;
+    NodeContainer loraGWNodesContainer;
+    NodeContainer nbEDNodesContainer;
+    NodeContainer nbGWNodesContainer;
+
+    NetDeviceContainer loraEDDevices;
+    NetDeviceContainer loraGWDevices;
+    NetDeviceContainer nbEDDevices;
+    NetDeviceContainer nbGWDevices;
+
 
     std::ostringstream simRunFilesPrefix;
     simRunFilesPrefix << outputFileNamePrefix << "-" << unix_epoch << "-" << std::to_string(i);
@@ -621,12 +682,12 @@ int main (int argc, char *argv[]) {
         << (uint32_t) drCalcFixedDRIndex << std::endl;
     }
 
-
     Ptr<LteHelper> lteHelper = CreateObject<LteHelper> (); 
     Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper> ();
     lteHelper->SetEpcHelper (epcHelper);
     Ptr<Node> pgw = epcHelper->GetPgwNode ();
 
+    // Create a single RemoteHost
     // Create a single RemoteHost
     NodeContainer remoteHostContainer;
     remoteHostContainer.Create (1);
@@ -636,7 +697,7 @@ int main (int argc, char *argv[]) {
 
     // Create the Internet
     PointToPointHelper p2ph;
-    p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("1Gb/s")));
+    p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
     p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
     p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
     NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);
@@ -647,11 +708,8 @@ int main (int argc, char *argv[]) {
     Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1);
 
     Ipv4StaticRoutingHelper ipv4RoutingHelper;
-    Ptr<Ipv4StaticRouting> remoteHostStaticRouting = 
-      ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
-
-    remoteHostStaticRouting->AddNetworkRouteTo (
-        Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
+    Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
+    remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
     // Create LoRaWan GW and ED 
     std::cout << "Creating " << (unsigned) nLoraGateways << " LoRaWAN Gateways.\n";
@@ -686,6 +744,7 @@ int main (int argc, char *argv[]) {
     Ptr<ListPositionAllocator> loraPositionList = CreateObject<ListPositionAllocator> ();
     for (uint32_t i = 0; i < (nLoraDevices); i++) {
       Vector v = Vector (-discRadius/2 + (i/2)*discRadius, -discRadius/2 + (i % 2)*discRadius, 0.0);
+      //Vector v = Vector (0.0, 0.0, 0.0); 
       loraPositionList->Add (v);
     }
 
@@ -697,6 +756,7 @@ int main (int argc, char *argv[]) {
     Ptr<ListPositionAllocator> nbPositionList = CreateObject<ListPositionAllocator> ();
     for (uint32_t i = 0; i < (nNbDevices); i++) {
       Vector v = Vector (-discRadius/2 + (i/2)*discRadius, -discRadius/2 + (i % 2)*discRadius, 0.0);
+      //Vector v = Vector (0.0, 0.0, 0.0);
       nbPositionList->Add (v);
     }
 
@@ -794,6 +854,7 @@ int main (int argc, char *argv[]) {
 
     // Install the IP stack on the UEs
     internet.Install (nbEDNodesContainer);
+
     Ipv4InterfaceContainer ueIpIface;
     ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (nbEDDevices));
     // Assign IP address to UEs, and install applications
@@ -812,7 +873,7 @@ int main (int argc, char *argv[]) {
       if (half < i)
         lteHelper->Attach (nbEDDevices.Get(i), nbGWDevices.Get(0));
       else
-        lteHelper->Attach (nbEDDevices.Get(i), nbGWDevices.Get(0));
+        lteHelper->Attach (nbEDDevices.Get(i), nbGWDevices.Get(1));
       // side effect: the default EPS bearer will be activated
     }
 
@@ -839,7 +900,7 @@ int main (int argc, char *argv[]) {
       serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
       serverApps.Add (packetSinkHelper.Install (nbEDNodesContainer.Get(u)));
 
-      double interPacketInterval = 5000;
+      double interPacketInterval = 3600000;
       UdpClientHelper dlClient (ueIpIface.GetAddress (u), dlPort);
       dlClient.SetAttribute ("Interval", TimeValue (MilliSeconds(interPacketInterval)));
       dlClient.SetAttribute ("MaxPackets", UintegerValue(1000000));
@@ -866,6 +927,8 @@ int main (int argc, char *argv[]) {
     example.CaseRun(
         loraEDNodesContainer,
         loraGWNodesContainer,
+        nbEDNodesContainer,
+        nbGWNodesContainer,
         loraEDDevices,
         loraGWDevices,
         nLoraDevices,
@@ -907,19 +970,20 @@ int main (int argc, char *argv[]) {
     Simulator::Run ();
     Simulator::Destroy ();
     example.WriteMiscStatsToFile ();
+    example.PrintMacCounters();
   }
 
   std::cout << "End Simulation\n";
   return 0;
 }
 
-LoRaWANExampleTracing::LoRaWANExampleTracing () : 
-  m_nrRW1Sent(0), m_nrRW2Sent(0), m_nrRW1Missed(0), m_nrRW2Missed(0) {}
 
 void
 LoRaWANExampleTracing::CaseRun (
       NodeContainer loraEDNodeContainer,
       NodeContainer loraGWNodeContainer,
+      NodeContainer nbEDNodesContainer,
+      NodeContainer nbGWNodesContainer,
       NetDeviceContainer loraEDDevices,
       NetDeviceContainer loraGWDevices,
       uint32_t nLoraDevices,
@@ -955,6 +1019,9 @@ LoRaWANExampleTracing::CaseRun (
   m_loraEDDevices = loraEDDevices;
   m_loraGWDevices = loraGWDevices;
 
+  m_nbEDNodeContainer = nbEDNodesContainer;
+  m_nbGWNodeContainer = nbGWNodesContainer;
+
   m_nLoraEndDevices = nLoraDevices;
   m_nLoraGateways = nLoraGateways;
 
@@ -981,9 +1048,80 @@ LoRaWANExampleTracing::CaseRun (
   m_miscTraceCSVFileName = miscTraceCSVFileName;
   m_nodesCSVFileName = nodesCSVFileName;
 
+  /***************************/
+  /* Counters                */
+  /**************************/
+  countEdMacTx = 0;
+  countEdMacTxOk = 0;
+  countEdMacTxDrop = 0;
+  countEdMacRx = 0;
+  countEdMacRxDrop = 0;
+  countEdSendPkt = 0;
+
+  countGwMacTx = 0;
+  countGwMacTxOk = 0;
+  countGwMacTxDrop = 0;
+  countGwMacRx = 0;
+  countGwMacRxDrop = 0;
+  countGwSendPkt = 0;
+
+  count_nbtx = 0;
+  count_nbrx = 0;
+
   SetupTracing (tracePhyTransmissions, tracePhyStates, traceMacPackets, traceMacStates, traceEdMsgs, traceNsDsMsgs, traceMisc);
   OutputNodesToFile ();
 }
+
+void
+LoRaWANExampleTracing::PrintMacCounters () {
+  std::cout << "MacEdTx " << countEdMacTx  
+    << " - MacGwTx " << countGwMacTx << "\n";
+
+  std::cout << "MacEdTxOk " << countEdMacTxOk 
+    << " - MacGwTxOk " << countGwMacTxOk << "\n";
+
+  std::cout << "MacEdTxDrop " << countEdMacTxDrop 
+    << " - MacGwTxDrop " << countGwMacTxDrop << "\n";
+
+  std::cout << "MacEdRx " << countEdMacRx 
+    << " - MacGwRx " << countGwMacRx<< "\n";
+
+  std::cout << "MacEdRxDrop " << countEdMacRxDrop 
+    << " - MacGwRxDrop " << countGwMacRxDrop << "\n";
+
+  std::cout << "MacEdSendPkt " << countEdSendPkt 
+    << " - MacGwSendPkt " << countGwSendPkt << "\n";
+
+  std::cout << "Nb Tx " << count_nbtx 
+    << " - Nb Rx " << count_nbrx << "\n";
+
+  std::ofstream out ("output/LoraResults.cvs", std::ios::app);
+  out << countEdMacTx << ","
+    << countEdMacTxOk << ","
+    << countEdMacTxDrop << ","
+    << countEdMacRx << ","
+    << countEdMacRxDrop << ","
+    << countEdSendPkt  << ","
+    << countGwMacTx << ","
+    << countGwMacTxOk << ","
+    << countGwMacTxDrop << ","
+    << countGwMacRx << ","
+    << countGwMacRxDrop << ","
+    << countGwSendPkt
+    << std::endl;
+  out.close ();
+
+  /*std::cout << "MacGwTx " << countGwMacTx << "\n";
+  std::cout << "MacGwTxOk " << countGwMacTxOk << "\n";
+  std::cout << "MacGwTxDrop " << countGwMacTxDrop << "\n";
+  std::cout << "MacGwRx " << countGwMacRx<< "\n";
+  std::cout << "MacGwRxDrop " << countGwMacRxDrop << "\n";
+  std::cout << "MacGwSendPkt " << countGwSendPkt << "\n";*/
+
+}
+
+LoRaWANExampleTracing::LoRaWANExampleTracing () : 
+  m_nrRW1Sent(0), m_nrRW2Sent(0), m_nrRW1Missed(0), m_nrRW2Missed(0) {}
 
 std::ostringstream
 LoRaWANExampleTracing::GeneratePhyTraceOutputLine (
@@ -1155,35 +1293,54 @@ LoRaWANExampleTracing::GenerateMacTraceOutputLine (
   return output;
 }
 
+  void
+LoRaWANExampleTracing::edMacSentPkt (
+    LoRaWANExampleTracing* example, 
+    Ptr<LoRaWANNetDevice> device, 
+    Ptr<LoRaWANMac> mac, 
+    Ptr<const Packet> packet, 
+    uint8_t n_transmissions)
+{
+  example->countEdSendPkt++;
+  std::ostringstream output = 
+    example->GenerateMacTraceOutputLine ("MacSentPkt", device, mac, packet, false);
+
+  output << "," << (uint32_t)n_transmissions << std::endl;
+  example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
+}
+
 void
-LoRaWANExampleTracing::MacTx (
+LoRaWANExampleTracing::edMacTx (
     LoRaWANExampleTracing* example, 
     Ptr<LoRaWANNetDevice> device, 
     Ptr<LoRaWANMac> mac, 
     Ptr<const Packet> packet)
 {
+  example->countEdMacTx++;
   std::ostringstream output = example->GenerateMacTraceOutputLine ("MacTx", device, mac, packet);
   example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
 }
 
 void
-LoRaWANExampleTracing::MacTxOk (
+LoRaWANExampleTracing::edMacTxOk (
     LoRaWANExampleTracing* example, 
     Ptr<LoRaWANNetDevice> device, 
     Ptr<LoRaWANMac> mac, 
     Ptr<const Packet> packet)
 {
+  example->countEdMacTxOk++;
   std::ostringstream output = example->GenerateMacTraceOutputLine ("MacTxOk", device, mac, packet);
   example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
 }
 
 void
-LoRaWANExampleTracing::MacTxDrop (
+LoRaWANExampleTracing::edMacTxDrop (
     LoRaWANExampleTracing* example, 
     Ptr<LoRaWANNetDevice> device, 
     Ptr<LoRaWANMac> mac, 
     Ptr<const Packet> packet)
 {
+  example->countEdMacTxDrop++;
   std::ostringstream output = 
     example->GenerateMacTraceOutputLine ("MacTxDrop", device, mac, packet);
 
@@ -1191,23 +1348,90 @@ LoRaWANExampleTracing::MacTxDrop (
 }
 
 void
-LoRaWANExampleTracing::MacRx (
+LoRaWANExampleTracing::edMacRx (
     LoRaWANExampleTracing* example, 
     Ptr<LoRaWANNetDevice> device, 
     Ptr<LoRaWANMac> mac, 
     Ptr<const Packet> packet)
 {
+  example->countEdMacRx++;
   std::ostringstream output = example->GenerateMacTraceOutputLine ("MacRx", device, mac, packet);
   example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
 }
 
 void
-LoRaWANExampleTracing::MacRxDrop (
+LoRaWANExampleTracing::edMacRxDrop (
     LoRaWANExampleTracing* example, 
     Ptr<LoRaWANNetDevice> device, 
     Ptr<LoRaWANMac> mac, 
     Ptr<const Packet> packet)
 {
+  example->countEdMacRxDrop++;
+  std::ostringstream output = 
+    example->GenerateMacTraceOutputLine ("MacRxDrop", device, mac, packet);
+
+  example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
+}
+
+
+void
+LoRaWANExampleTracing::gwMacTx (
+    LoRaWANExampleTracing* example, 
+    Ptr<LoRaWANNetDevice> device, 
+    Ptr<LoRaWANMac> mac, 
+    Ptr<const Packet> packet)
+{
+  example->countGwMacTx++;
+  std::ostringstream output = example->GenerateMacTraceOutputLine ("MacTx", device, mac, packet);
+  example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
+}
+
+void
+LoRaWANExampleTracing::gwMacTxOk (
+    LoRaWANExampleTracing* example, 
+    Ptr<LoRaWANNetDevice> device, 
+    Ptr<LoRaWANMac> mac, 
+    Ptr<const Packet> packet)
+{
+  example->countGwMacTxOk++;
+  std::ostringstream output = example->GenerateMacTraceOutputLine ("MacTxOk", device, mac, packet);
+  example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
+}
+
+void
+LoRaWANExampleTracing::gwMacTxDrop (
+    LoRaWANExampleTracing* example, 
+    Ptr<LoRaWANNetDevice> device, 
+    Ptr<LoRaWANMac> mac, 
+    Ptr<const Packet> packet)
+{
+  example->countGwMacTxDrop++;
+  std::ostringstream output = 
+    example->GenerateMacTraceOutputLine ("MacTxDrop", device, mac, packet);
+
+  example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
+}
+
+void
+LoRaWANExampleTracing::gwMacRx (
+    LoRaWANExampleTracing* example, 
+    Ptr<LoRaWANNetDevice> device, 
+    Ptr<LoRaWANMac> mac, 
+    Ptr<const Packet> packet)
+{
+  example->countGwMacRx++;
+  std::ostringstream output = example->GenerateMacTraceOutputLine ("MacRx", device, mac, packet);
+  example->LogOutputLine (output.str (), example->m_macPacketTraceCSVFileName);
+}
+
+void
+LoRaWANExampleTracing::gwMacRxDrop (
+    LoRaWANExampleTracing* example, 
+    Ptr<LoRaWANNetDevice> device, 
+    Ptr<LoRaWANMac> mac, 
+    Ptr<const Packet> packet)
+{
+  example->countGwMacRxDrop++;
   std::ostringstream output = 
     example->GenerateMacTraceOutputLine ("MacRxDrop", device, mac, packet);
 
@@ -1215,13 +1439,14 @@ LoRaWANExampleTracing::MacRxDrop (
 }
 
 void
-LoRaWANExampleTracing::MacSentPkt (
+LoRaWANExampleTracing::gwMacSentPkt (
     LoRaWANExampleTracing* example, 
     Ptr<LoRaWANNetDevice> device, 
     Ptr<LoRaWANMac> mac, 
     Ptr<const Packet> packet, 
     uint8_t n_transmissions)
 {
+  example->countGwSendPkt++;
   std::ostringstream output = 
     example->GenerateMacTraceOutputLine ("MacSentPkt", device, mac, packet, false);
 
@@ -1486,6 +1711,7 @@ LoRaWANExampleTracing::USMsgReceivedTrace (
 void
 LoRaWANExampleTracing::WriteMiscStatsToFile ()
 {
+
   std::ofstream out (m_miscTraceCSVFileName.c_str (), std::ios::app);
   out << m_nrRW1Sent << ","
     << m_nrRW2Sent << ","
@@ -1505,6 +1731,33 @@ LoRaWANExampleTracing::SetupTracing (
     bool traceNsDsMsgs, 
     bool traceMisc)
 {
+
+  //Config::Connect ("/NodeList/*/DeviceList/*/ComponentCarrierMapUe/*/LteUePhy/DlSpectrumPhy/DlPhyReception",
+  //    MakeBoundCallback(&LoRaWANExampleTracing::NBTx, this));
+
+  //Config::Connect ("/NodeList/*/DeviceList/*/ComponentCarrierMap/*/LteEnbPhy/UlSpectrumPhy/UlPhyReception",
+    //               MakeBoundCallback (&LoRaWANExampleTracing::NBRx, this));
+  /*if (true){
+    for (NodeContainer::Iterator i = m_nbEDNodeContainer.Begin();
+        i != m_nbEDNodeContainer.End(); ++i)
+    {
+        Ptr<Node> node = *i;
+        Ptr<LteUeNetDevice> netDevice = DynamicCast<LteUeNetDevice> (node->GetDevice(0));
+        Ptr<LteUePhy> phy = netDevice->GetPhy();
+        
+        phy->TraceConnectWithoutContext("UlPhyTransmission", MakeBoundCallback(&LoRaWANExampleTracing::NBTx, this, netDevice, phy));
+    }
+    for (NodeContainer::Iterator i = m_nbGWNodeContainer.Begin();
+        i != m_nbGWNodeContainer.End(); ++i)
+    {
+        Ptr<Node> node = *i;
+        Ptr<LteEnbNetDevice> netDevice = DynamicCast<LteEnbNetDevice> (node->GetDevice(0));
+        Ptr<LteEnbPhy> phy = netDevice->GetPhy();
+
+        phy->TraceConnectWithoutContext("DlPhyTransmission", MakeBoundCallback(&LoRaWANExampleTracing::NBRx, this, netDevice, phy));
+    }
+  }*/
+
   // Connect trace sources.
   // Trace Phy transmissions:
   if (tracePhyTransmissions) {
@@ -1585,17 +1838,17 @@ LoRaWANExampleTracing::SetupTracing (
       Ptr<LoRaWANMac> mac = netDevice->GetMac ();
 
       mac->TraceConnectWithoutContext ("MacTx", 
-          MakeBoundCallback (&LoRaWANExampleTracing::MacTx, this, netDevice, mac));
+          MakeBoundCallback (&LoRaWANExampleTracing::edMacTx, this, netDevice, mac));
       mac->TraceConnectWithoutContext ("MacTxOk", 
-          MakeBoundCallback (&LoRaWANExampleTracing::MacTxOk, this, netDevice, mac));
+          MakeBoundCallback (&LoRaWANExampleTracing::edMacTxOk, this, netDevice, mac));
       mac->TraceConnectWithoutContext ("MacTxDrop", 
-          MakeBoundCallback (&LoRaWANExampleTracing::MacTxDrop, this, netDevice, mac));
+          MakeBoundCallback (&LoRaWANExampleTracing::edMacTxDrop, this, netDevice, mac));
       mac->TraceConnectWithoutContext ("MacRx", 
-          MakeBoundCallback (&LoRaWANExampleTracing::MacRx, this, netDevice, mac));
+          MakeBoundCallback (&LoRaWANExampleTracing::edMacRx, this, netDevice, mac));
       mac->TraceConnectWithoutContext ("MacRxDrop", 
-          MakeBoundCallback (&LoRaWANExampleTracing::MacRxDrop, this, netDevice, mac));
+          MakeBoundCallback (&LoRaWANExampleTracing::edMacRxDrop, this, netDevice, mac));
       mac->TraceConnectWithoutContext ("MacSentPkt", 
-          MakeBoundCallback (&LoRaWANExampleTracing::MacSentPkt, this, netDevice, mac));
+          MakeBoundCallback (&LoRaWANExampleTracing::edMacSentPkt, this, netDevice, mac));
     }
 
     for (NodeContainer::Iterator i = m_loraGWNodeContainer.Begin (); 
@@ -1605,17 +1858,17 @@ LoRaWANExampleTracing::SetupTracing (
       Ptr<LoRaWANNetDevice> netDevice = DynamicCast<LoRaWANNetDevice> (node->GetDevice (0));
       for (auto &mac : netDevice->GetMacs ()) {
         mac->TraceConnectWithoutContext ("MacTx", 
-            MakeBoundCallback (&LoRaWANExampleTracing::MacTx, this, netDevice, mac));
+            MakeBoundCallback (&LoRaWANExampleTracing::gwMacTx, this, netDevice, mac));
         mac->TraceConnectWithoutContext ("MacTxOk", 
-            MakeBoundCallback (&LoRaWANExampleTracing::MacTxOk, this, netDevice, mac));
+            MakeBoundCallback (&LoRaWANExampleTracing::gwMacTxOk, this, netDevice, mac));
         mac->TraceConnectWithoutContext ("MacTxDrop", 
-            MakeBoundCallback (&LoRaWANExampleTracing::MacTxDrop, this, netDevice, mac));
+            MakeBoundCallback (&LoRaWANExampleTracing::gwMacTxDrop, this, netDevice, mac));
         mac->TraceConnectWithoutContext ("MacRx", 
-            MakeBoundCallback (&LoRaWANExampleTracing::MacRx, this, netDevice, mac));
+            MakeBoundCallback (&LoRaWANExampleTracing::gwMacRx, this, netDevice, mac));
         mac->TraceConnectWithoutContext ("MacRxDrop", 
-            MakeBoundCallback (&LoRaWANExampleTracing::MacRxDrop, this, netDevice, mac));
+            MakeBoundCallback (&LoRaWANExampleTracing::gwMacRxDrop, this, netDevice, mac));
         mac->TraceConnectWithoutContext ("MacSentPkt", 
-            MakeBoundCallback (&LoRaWANExampleTracing::MacSentPkt, this, netDevice, mac));
+            MakeBoundCallback (&LoRaWANExampleTracing::gwMacSentPkt, this, netDevice, mac));
       }
     }
 
@@ -1782,5 +2035,16 @@ LoRaWANExampleTracing::LogOutputLine (std::string output, std::string fileName)
   if (outputstream.is_open()) {
     outputstream << output << std::endl;
   }
+}
+
+
+void LoRaWANExampleTracing::NBTx (LoRaWANExampleTracing* example) 
+{
+  example->count_nbtx++;
+}
+
+void LoRaWANExampleTracing::NBRx (LoRaWANExampleTracing* example) 
+{
+  example->count_nbrx++;
 }
 

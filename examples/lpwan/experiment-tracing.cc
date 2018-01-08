@@ -240,7 +240,7 @@ int main (int argc, char *argv[])
   double drCalcFixedDRIndex = 0;
   uint32_t usPacketSize = 21;
   uint32_t usMaxBytes = 0;
-  double usDataPeriod = 600.0;
+  double usDataPeriod = 1.0;
   uint32_t usUnconfirmedDataNbRep = 1;
   bool usConfirmedData = false;
   uint32_t dsPacketSize = 21;
